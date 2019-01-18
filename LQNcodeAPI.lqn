@@ -1,0 +1,118 @@
+# Define control parameter and assign ranges of values
+$N=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,30,35,40,50,60,70,80,90,100,200,300,400,500]
+$threads=[1,2,5]
+$PS = 0.9
+$PCM= 0.3
+$UPCM=1- $PCM
+$UPS=1- $PS 
+$POSt= 0.6*$UPS
+$Comt= 0.4*$UPS
+
+
+G
+"Example of mobile app Layered Queueing Network"
+1e-06
+500
+1
+0.5
+-1
+
+P 6
+p mp f i %u $ump
+p wsp s %u $uwsp
+p APIp s %u $uwsp
+p wsd f %u $uwsd
+p dbp s %u $udbp
+p dbd f %u $udbd
+-1
+
+T 0
+t AppGUI r Action -1 mp m $N %f $thru1
+t AppDB n cached APIrequest -1 mp m $N %u $ADB
+t API n analyze -1 APIp m $threads %u $uAPI
+t WebServer n webserver -1 wsp %u $uWS
+t WSDisk n Sdiskread Sdiskwrite -1 wsd %u $uwsDisk
+t DBServer n retreiveImage retreiveComment storeComment storeImage -1 dbp %u $uDB
+t BuildBlock n  WriteBlock ReadBlock -1 dbp %u $uBB
+t DBDisk n diskread diskwrite -1 dbd %u $udbDisk
+-1
+
+E 0
+s Action 1e-06 0.8   -1 %s1 $rt1
+Z Action 2 1e-06 -1
+y Action cached $UPCM -1
+y Action APIrequest $PCM -1
+s cached  0.01 -1
+s APIrequest 0.2 -1
+y APIrequest analyze 1 -1
+s analyze 0.01 0.1 -1
+y analyze webserver 1 -1 #request to the webserver
+A webserver serverStart #entry server is defined by
+#activities, with the first one being serverStart
+s Sdiskread 0.001 -1 #operation time of this entry
+s Sdiskwrite 0.001 -1
+s diskread 0.05 -1
+s diskwrite 0.05 -1
+s storeImage 0.2 -1
+s storeComment 0.001 -1 
+s retreiveImage 0.08 -1
+s retreiveComment 0.001 -1
+s WriteBlock 0.3 -1
+s ReadBlock 0.2 -1
+y ReadBlock diskread 4 -1
+y WriteBlock diskread 2 -1
+y WriteBlock diskwrite 4 -1
+y storeImage WriteBlock 4 -1
+y storeComment WriteBlock 0.1 -1
+y retreiveImage ReadBlock 3 -1
+y retreiveComment ReadBlock 0.1 -1
+-1
+
+A WebServer #activities for the Web server 
+ s serverStart 1e-06 #every activity that is used must have a host demand
+ s post 1e-06 # initalization of a post action 
+ s comment 1e-06 # initalization of a comment action 
+ s getImage 1e-06 # initalization of a getImage action 
+ s createMetedate 0.05 
+ s processImg 0.15 
+ s processComm 0.15 
+ s retrieveImg 0.002
+ s retreiveI 1e-06 
+ y retreiveI retreiveImage 1 
+ s retreiveCo 1e-06  
+ y retreiveCo retreiveComment 1 
+ y processImg storeImage 4.3
+ z processImg Sdiskwrite 4.3
+ y processComm storeComment 1.6 
+ z processComm Sdiskwrite 1.6 
+ s fetchImg 0.01
+ y fetchImg Sdiskread 3 
+# s WSreply 0.1
+ :
+ serverStart -> ($POSt)post + ($Comt)comment + ($PS)getImage;
+ #post[webserver];
+ #comment[webserver];
+ #getImage[webserver];
+ #retrieveImg[webserver];
+ getImage -> ($PCM)retrieveImg + ($UPCM)fetchImg;
+ retrieveImg -> 7* retreiveCo, retreiveI; #retreiveComment is executed avge 7 times
+ comment -> processComm;
+ post -> createMetedate;
+ createMetedate -> processImg;
+ retreiveI[webserver];
+ processImg[webserver];
+ processComm[webserver];
+ fetchImg[webserver]
+ #retreiveCo[webserver];
+ #processComm & processImg & retreiveI & retreiveCo & fetchImg -> WSreply;
+ #WSreply[webserver] #generate the reply DB 
+ -1
+
+ 
+#
+R 0
+$0=$N
+#$threads 
+$thru1 $rt1
+$ADB $uAPI $uWS $uwsDisk $uDB $uBB $udbDisk
+-1
